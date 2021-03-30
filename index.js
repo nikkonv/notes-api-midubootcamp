@@ -1,6 +1,9 @@
 const express = require('express')
+const cors = require('cors')
+
 const app = express()
 
+app.use(cors())
 app.use(express.json())
 
 let notes = [
@@ -45,7 +48,7 @@ app.get('/api/notes/:id', (req, res) => {
 app.post('/api/notes', (req, res) => {
   const note = req.body
 
-  if (!note || !note.content || !note.date) {
+  if (!note || !note.content) {
     return res.status(400).json({ error: 'Parámetros incorrectos o faltantes' })
   }
 
@@ -68,6 +71,19 @@ app.delete('/api/notes/:id', (req, res) => {
   const id = Number(req.params.id)
   notes = notes.filter((note) => note.id !== id)
   res.status(204).end()
+})
+
+app.put('/api/notes/:id', (req, res) => {
+  const id = Number(req.params.id)
+  notes.map((note) => {
+    if (note.id === id) {
+      note.important = !note.important
+      console.log(notes)
+      return res.status(204).end()
+    }
+  })
+  console.log('bbb')
+  res.status(404).json({ error: 'Nota no encontrada' })
 })
 
 app.use((req, res) => {
