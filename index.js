@@ -1,95 +1,92 @@
+require('./mongo')
+
 const express = require('express')
+const app = express()
 const cors = require('cors')
 
-const app = express()
+const Note = require('./models/Note')
 
 app.use(cors())
 app.use(express.json())
-
-let notes = [
-  {
-    id: 1,
-    content: 'Me tengo que suscribir a @midudev en YouTube',
-    date: '2019-05-30T17:30:31.098Z',
-    important: true,
-  },
-  {
-    id: 2,
-    content: 'Tengo que estudiar las clases del FullStack Bootcamp',
-    date: '2019-05-30T18:39:34.091Z',
-    important: false,
-  },
-  {
-    id: 3,
-    content: 'Repasar los retos de JS de midudev',
-    date: '2019-05-30T19:20:14.298Z',
-    important: true,
-  },
-]
 
 app.get('/', (req, res) => {
   res.json({ message: 'Hello' })
 })
 
 app.get('/api/notes', (req, res) => {
-  res.json(notes)
+  Note.find({})
+    .then((notes) => res.json(notes))
+    .catch((err) => next(err))
 })
 
-app.get('/api/notes/:id', (req, res) => {
-  const id = Number(req.params.id)
-  const note = notes.find((note) => note.id === id)
-  if (note) {
-    res.json(note)
-  } else {
-    res.status(404).json({ error: 'Nota no encontrada' })
-  }
+app.get('/api/notes/:id', (req, res, next) => {
+  Note.findById(req.params.id)
+    .then((note) => {
+      note
+        ? res.json(note)
+        : res.status(404).json({ error: 'Nota no encontrada' })
+    })
+    .catch((err) => next(err))
 })
 
-app.post('/api/notes', (req, res) => {
+app.post('/api/notes', (req, res, next) => {
   const note = req.body
 
   if (!note || !note.content) {
     return res.status(400).json({ error: 'Parámetros incorrectos o faltantes' })
   }
 
-  const ids = notes.map((note) => note.id)
-  const maxId = Math.max(...ids)
-  // also we can use the package uuid
-
-  const newNote = {
-    id: maxId + 1,
+  const newNote = new Note({
     content: note.content,
     important: typeof note.important !== 'undefined' ? note.important : false,
     date: new Date().toISOString(),
+  })
+
+  newNote
+    .save()
+    .then((savedNote) => {
+      res.status(201).json(savedNote)
+    })
+    .catch((err) => next(err))
+})
+
+app.delete('/api/notes/:id', (req, res, next) => {
+  Note.findByIdAndDelete(req.params.id)
+    .then(() => {
+      res.status(204).end()
+    })
+    .catch((err) => next(err))
+})
+
+app.put('/api/notes/:id', (req, res, next) => {
+  const note = req.body
+
+  if (
+    typeof note.content === 'undefined' ||
+    typeof note.important === 'undefined'
+  ) {
+    return res.status(400).json({ error: 'Parámetros incorrectos o faltantes' })
   }
-  notes = [...notes, newNote]
 
-  res.status(201).json(newNote)
+  Note.findByIdAndUpdate(req.params.id, note, { new: true })
+    .then((result) => {
+      res.json(result)
+    })
+    .catch((err) => next(err))
 })
 
-app.delete('/api/notes/:id', (req, res) => {
-  const id = Number(req.params.id)
-  notes = notes.filter((note) => note.id !== id)
-  res.status(204).end()
+// se puede usar sentry para controlar mejor los errores 500
+
+app.use((req, res, next) => {
+  res.status(404).end()
 })
 
-app.put('/api/notes/:id', (req, res) => {
-  const id = Number(req.params.id)
-  notes.map((note) => {
-    if (note.id === id) {
-      note.important = !note.important
-      console.log(notes)
-      return res.status(204).end()
-    }
-  })
-  console.log('bbb')
-  res.status(404).json({ error: 'Nota no encontrada' })
-})
+app.use((error, req, res, next) => {
+  console.error(error)
 
-app.use((req, res) => {
-  res.status(404).json({
-    error: 'Ruta no encontrada',
-  })
+  error.name === 'CastError'
+    ? res.status(400).json({ error: 'ID o valores incorrectos' }).end()
+    : res.status(500).end()
 })
 
 const PORT = process.env.PORT || 3001
